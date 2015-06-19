@@ -74,6 +74,7 @@ Ext.define('CustomApp', {
 			success : function(values) {
 				console.log("values",values);
 				_.each(workspaces,function(workspace,i){
+					console.log(workspace.get("Name"),values[i].length);
 					workspace.set("WorkspaceFeatureCount",values[i].length);
 				})
 				deferred.resolve([]);
@@ -193,7 +194,7 @@ Ext.define('CustomApp', {
             me._loadAStoreWithAPromise(
                     "PortfolioItem", 
                     ["FormattedID"], 
-                    [createFeatureFilter()],
+                    [], //[createFeatureFilter()],
                     {
                     	workspace : workspace.get("_ref"),
                     	project : null,
