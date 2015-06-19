@@ -28,6 +28,9 @@ Ext.define('CustomApp', {
                 	success : function(results) {
 						console.log("workspaces",_.map(workspaces,function(w){return w.get("Name")+"-"+w.get("UserWorkspaceCount")+":"+w.get("ProjectsCount")}));
 						me.createChart(me.prepareChartData(workspaces));
+                	},
+                	failure : function(error) {
+                		console.log("error---",error);
                 	}
 
                 });
@@ -59,27 +62,37 @@ Ext.define('CustomApp', {
 
 		var seriesData = _.map(workspaces,function(ws){
 
-			var activityUsers = _.uniq( _.map(ws.get("WorkspaceUserActivity"), function(snapshot) { return snapshot._User;}));
-			var totalUsers = ws.get("UserWorkspaceCount");
+			// var activityUsers = _.uniq( _.map(ws.get("WorkspaceUserActivity"), function(snapshot) { return snapshot._User;}));
+			// var totalUsers = ws.get("UserWorkspaceCount");
 			
-			var pct = totalUsers > 0 ? (activityUsers.length / totalUsers ) * 100 : 0;
+			// var pct = totalUsers > 0 ? (activityUsers.length / totalUsers ) * 100 : 0;
 			
-			var seriesColor = null;
-			if (pct > 80) { seriesColor = "#107c1e" } else
-				if (pct > 60) { seriesColor = "#8dc63f"} else 
-					if (pct > 40) { seriesColor = "#fad200"} else
-						if (pct > 20) { seriesColor = "#ee6c19"} else
-							seriesColor = "#ec1c27";
+			// var seriesColor = null;
+			// if (pct > 80) { seriesColor = "#107c1e" } else
+			// 	if (pct > 60) { seriesColor = "#8dc63f"} else 
+			// 		if (pct > 40) { seriesColor = "#fad200"} else
+			// 			if (pct > 20) { seriesColor = "#ee6c19"} else
+			// 				seriesColor = "#ec1c27";
 
-			console.log(ws.get("Name"),"ActiveUsers:",activityUsers.length,"TotalUsers",totalUsers,"Percent",pct,"color:",seriesColor);
+			// console.log(ws.get("Name"),"ActiveUsers:",activityUsers.length,"TotalUsers",totalUsers,"Percent",pct,"color:",seriesColor);
+
+			var snapshots = ws.get("WorkspaceUserActivity");
+			var features = ws.get("WorkspaceFeatureCount");
+			var totalUsers = ws.get("UserWorkspaceCount");
+
+			var featureRatio = snapshots > 0 ? Math.round((features / snapshots) * 100) / 100 : 0 ;
+			var activityRatio = snapshots > 0 ? Math.round((totalUsers / snapshots) * 100) / 100 : 0 ;
 
 			return {
 				name : ws.get("Name"),
-				color : seriesColor,
+				// color : seriesColor,
 				data : [{ x : ws.get("FeatureTIPValue"), 
 						  y : ws.get("WorkspaceFeatureCount"), 
 						  z : ws.get("UserWorkspaceCount"),
-						  pct : pct}]
+						  featureRatio : featureRatio,
+						  activityRatio : activityRatio
+						}]
+						  // pct : pct}]
 			}
 		});    	
 
@@ -144,6 +157,7 @@ Ext.define('CustomApp', {
     		success : function(values) {
     			console.log("Workspace Snapshots:",values);
     			_.each(workspaces,function(workspace,i){
+    				console.log("snapshot:",workspace.get("Name"),values[i]);
     				workspace.set("WorkspaceUserActivity", values[i]);
     			})
     			deferred.resolve([]);
@@ -328,28 +342,6 @@ Ext.define('CustomApp', {
         return Deft.Promise.all(promises);
 	},
 
-	readWorkspacePermissions : function() {
-
-		var me = this;
-        
-        var deferred = Ext.create('Deft.Deferred');
-
-        me._loadAStoreWithAPromise(
-            'WorkspacePermission', 
-            ["Workspace","User","Name","Role"]
-            ).then({
-	            scope: this,
-	            success: function(permissions) {
-	            	console.log("Permissions:",permissions.length);
-	            	var data = _.map(permissions,function(p){return p.data;});
-	                deferred.resolve(data);
-	            }
-        }) 
-
-        return deferred.promise;
-    
-    },
-
     readWorkspaces : function() {
         var deferred = Ext.create('Deft.Deferred');
     	this._loadAStoreWithAPromise( "Subscription", ["Name","Workspaces"])
@@ -449,19 +441,21 @@ Ext.define('CustomApp', {
         var config = {
             find : find,
             fetch: fetch,
-            hydrate : hydrate
+            hydrate : hydrate,
+            pageSize : 100
         };
 
         if (!_.isUndefined(ctx)) { config.context = ctx;}
 
         var storeConfig = Ext.merge(config, {
+        	removeUnauthorizedSnapshots : true,
             autoLoad : true,
-            limit: Infinity,
+            // limit: Infinity,
             listeners: {
                load: function(store, data, success) {
-            		// console.log("snapshots success",success,data.length);
-            		var raw = _.map(data,function(d) { return d.data; })
-            		deferred.resolve(raw);
+            		console.log("snapshots success",store,success,data.length,store.totalCount);
+            		// var raw = _.map(data,function(d) { return d.data; })
+            		deferred.resolve( store.totalCount );
         		}
             },
         });

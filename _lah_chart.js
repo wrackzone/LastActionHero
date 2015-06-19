@@ -30,7 +30,8 @@ Ext.define('Rally.technicalservices.lahChart',{
             bubble: {
                 tooltip: {
                     headerFormat: '<b>{series.name}</b><br>',
-                    pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}, % Active:{point.pct}'
+                    //pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}, % Active:{point.pct}'
+                    pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}<br>Feature Ratio:{point.featureRatio} Activity Ratio:{point.activityRatio}'
                 }
             }
         }
