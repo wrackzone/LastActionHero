@@ -6,9 +6,13 @@ Ext.define('CustomApp', {
 
     	var me = this;
 
+    	me.setLoading(true);
+
         Deft.Promise.all([me.readWorkspaces()],me).then({
 
             success: function(results) {
+
+            	me.setLoading(false);
                 console.log("results",results);
                 var workspaces = _.first(results);
 
@@ -16,7 +20,8 @@ Ext.define('CustomApp', {
 
                 	me.setUserCounts(workspaces),
                 	me.setFeatureCounts(workspaces),
-                	me.setFeatureTIP(workspaces)
+                	me.setFeatureTIP(workspaces),
+                	me.setUserActivity(workspaces)
 
                 ],me).then({
 
@@ -53,11 +58,28 @@ Ext.define('CustomApp', {
     prepareChartData : function(workspaces) {
 
 		var seriesData = _.map(workspaces,function(ws){
+
+			var activityUsers = _.uniq( _.map(ws.get("WorkspaceUserActivity"), function(snapshot) { return snapshot._User;}));
+			var totalUsers = ws.get("UserWorkspaceCount");
+			
+			var pct = totalUsers > 0 ? (activityUsers.length / totalUsers ) * 100 : 0;
+			
+			var seriesColor = null;
+			if (pct > 80) { seriesColor = "#107c1e" } else
+				if (pct > 60) { seriesColor = "#8dc63f"} else 
+					if (pct > 40) { seriesColor = "#fad200"} else
+						if (pct > 20) { seriesColor = "#ee6c19"} else
+							seriesColor = "#ec1c27";
+
+			console.log(ws.get("Name"),"ActiveUsers:",activityUsers.length,"TotalUsers",totalUsers,"Percent",pct,"color:",seriesColor);
+
 			return {
 				name : ws.get("Name"),
+				color : seriesColor,
 				data : [{ x : ws.get("FeatureTIPValue"), 
 						  y : ws.get("WorkspaceFeatureCount"), 
-						  z : ws.get("UserWorkspaceCount")}]
+						  z : ws.get("UserWorkspaceCount"),
+						  pct : pct}]
 			}
 		});    	
 
@@ -114,6 +136,57 @@ Ext.define('CustomApp', {
     	return deferred.promise;
 
     },
+
+    setUserActivity : function(workspaces) {
+    	var me = this;
+    	var deferred = Ext.create('Deft.Deferred');
+    	me.readWorkspaceSnapshots(workspaces).then({
+    		success : function(values) {
+    			console.log("Workspace Snapshots:",values);
+    			_.each(workspaces,function(workspace,i){
+    				workspace.set("WorkspaceUserActivity", values[i]);
+    			})
+    			deferred.resolve([]);
+    		}
+    	});
+    	return deferred.promise;
+    },
+
+    readWorkspaceSnapshots : function(workspaces) {
+
+    	var createSnapshotFind = function(workspace) {
+            var find = {
+            	"_ValidFrom" : { "$gt" : moment().subtract(30,"days").toISOString() } // "2015-06-01T00:00:00.000Z"} // moment().subtract(30,"days").toISOString()
+            }
+        	return find;
+        };
+
+		var me = this;
+        var promises = _.map(workspaces,function(workspace) {
+            var deferred = Ext.create('Deft.Deferred');
+            // find,fetch,hydrate,ctx
+            me.loadASnapShotStoreWithAPromise(
+                    createSnapshotFind(workspace), 
+                    ["_User"], 
+                    [],
+                    {
+                    	workspace : workspace.get("_ref"),
+                    	project : null,
+                    }
+                ).then({
+                    scope: me,
+                    success: function(values) {
+                        deferred.resolve(values);
+                    },
+                    failure: function(error) {
+                    	console.log("error",error);
+                        deferred.resolve([]);
+                    }
+                });
+            return deferred.promise;
+        });
+        return Deft.Promise.all(promises);
+	},
 
     setProjectCounts : function(workspaces) {
 
@@ -194,7 +267,7 @@ Ext.define('CustomApp', {
             me._loadAStoreWithAPromise(
                     "PortfolioItem", 
                     ["FormattedID"], 
-                    [], //[createFeatureFilter()],
+                    [createFeatureFilter()],
                     {
                     	workspace : workspace.get("_ref"),
                     	project : null,
@@ -367,6 +440,35 @@ Ext.define('CustomApp', {
             }
         });
         return deferred.promise;
+    },
+
+    loadASnapShotStoreWithAPromise: function(find, fetch, hydrate, ctx) {
+        var me = this;
+        var deferred = Ext.create('Deft.Deferred');
+          
+        var config = {
+            find : find,
+            fetch: fetch,
+            hydrate : hydrate
+        };
+
+        if (!_.isUndefined(ctx)) { config.context = ctx;}
+
+        var storeConfig = Ext.merge(config, {
+            autoLoad : true,
+            limit: Infinity,
+            listeners: {
+               load: function(store, data, success) {
+            		// console.log("snapshots success",success,data.length);
+            		var raw = _.map(data,function(d) { return d.data; })
+            		deferred.resolve(raw);
+        		}
+            },
+        });
+        // console.log("storeConfig",storeConfig);
+		Ext.create('Rally.data.lookback.SnapshotStore', storeConfig);
+        return deferred.promise;
     }
+
 
 });
