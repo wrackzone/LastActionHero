@@ -258,51 +258,63 @@ Ext.define('CustomApp', {
         
         var deferred = Ext.create('Deft.Deferred');
 
-        Ext.define('lah-cache', {
-		    fields: ['date', 'value'],
-		    extend: 'Ext.data.Model',
-		    proxy: {
-		        type: 'localstorage',
-		        id  : 'lah-workspace-permissions'
-		    }
-		});
+        me._loadAStoreWithAPromise(
+            'WorkspacePermission', 
+            ["Workspace","User","Name","Role"]
+            ).then({
+	            scope: this,
+	            success: function(permissions) {
+	            	console.log("Permissions:",permissions.length);
+	            	var data = _.map(permissions,function(p){return p.data;});
+	                deferred.resolve(data);
+	            }
+        }) 
 
-		var store = Ext.create('Ext.data.Store', {
-			autoLoad : false,
-    		model: "lah-cache"
-		});
+  //       Ext.define('lah-cache', {
+		//     fields: ['date', 'value'],
+		//     extend: 'Ext.data.Model',
+		//     proxy: {
+		//         type: 'localstorage',
+		//         id  : 'lah-workspace-permissions'
+		//     }
+		// });
 
-		store.load(function(records, operation, success){
+		// var store = Ext.create('Ext.data.Store', {
+		// 	autoLoad : false,
+  //   		model: "lah-cache"
+		// });
 
-			console.log("Success:",success,"Records:",records.length,records);
-			var now = moment();
-			if (records.length>0) {
-				var rec = _.first(records);
-				if (moment.duration(now.diff( moment(rec.get("date")))).asHours() > 24) {
-					store.remove(records);
-					store.sync();
-					records = [];
-				} else {
-					console.log("Resolving from cache");
-					deferred.resolve(_.first(records).get("value"));
-				}
-			}
-			if (records.length===0) {
-		        me._loadAStoreWithAPromise(
-	            'WorkspacePermission', 
-	            ["Workspace","User","Name","Role"]
-	            ).then({
-		            scope: this,
-		            success: function(permissions) {
-		            	console.log("Permissions:",permissions.length);
-		            	var data = _.map(permissions,function(p){return p.data;});
-		            	store.add({date: new Date(),value: data});
-		            	store.sync();
-		                deferred.resolve(data);
-		            }
-	            }) 
-	        } 
-        });
+		// store.load(function(records, operation, success){
+
+		// 	console.log("Success:",success,"Records:",records.length,records);
+		// 	var now = moment();
+		// 	if (records.length>0) {
+		// 		var rec = _.first(records);
+		// 		if (moment.duration(now.diff( moment(rec.get("date")))).asHours() > 24) {
+		// 			store.remove(records);
+		// 			store.sync();
+		// 			records = [];
+		// 		} else {
+		// 			console.log("Resolving from cache");
+		// 			deferred.resolve(_.first(records).get("value"));
+		// 		}
+		// 	}
+		// 	if (records.length===0) {
+		//         me._loadAStoreWithAPromise(
+	 //            'WorkspacePermission', 
+	 //            ["Workspace","User","Name","Role"]
+	 //            ).then({
+		//             scope: this,
+		//             success: function(permissions) {
+		//             	console.log("Permissions:",permissions.length);
+		//             	var data = _.map(permissions,function(p){return p.data;});
+		//             	store.add({date: new Date(),value: data});
+		//             	store.sync();
+		//                 deferred.resolve(data);
+		//             }
+	 //            }) 
+	 //        } 
+  //       });
 
         return deferred.promise;
     
