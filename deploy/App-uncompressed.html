@@ -90,23 +90,29 @@
 			var features = ws.get("WorkspaceFeatureCount");
 			var totalUsers = ws.get("UserWorkspaceCount");
 
-			var featureRatio = snapshots > 0 ? Math.round((features / snapshots) * 100) / 100 : 0 ;
-			var activityRatio = snapshots > 0 ? Math.round((totalUsers / snapshots) * 100) / 100 : 0 ;
+			var featureRatio = features > 0 ? Math.round((snapshots / features ) * 100) / 100 : 0 ;
+			var activityRatio = totalUsers > 0 ? Math.round((snapshots / totalUsers ) * 100) / 100 : 0 ;
+
+			featureRatio = _.isNaN(featureRatio) ? 0 : featureRatio;
+			activityRatio = _.isNaN(activityRatio) ? 0 : activityRatio;
 
 			return {
 				name : ws.get("Name"),
 				// color : seriesColor,
 				data : [{ x : ws.get("FeatureTIPValue"), 
-						  y : ws.get("WorkspaceFeatureCount"), 
+						  // y : ws.get("WorkspaceFeatureCount"), 
+						  y : activityRatio,
 						  z : ws.get("UserWorkspaceCount"),
 						  featureRatio : featureRatio,
-						  activityRatio : activityRatio
+						  activityRatio : activityRatio,
+						  snapshots : snapshots
 						}]
 						  // pct : pct}]
 			}
 		});    	
 
     	console.log("seriesData",seriesData);
+    	console.log("seriesData",_.map(seriesData,function(sd){return _.first(sd.data).y}));
     	return seriesData;
 
     },
@@ -463,7 +469,7 @@
             // limit: Infinity,
             listeners: {
                load: function(store, data, success) {
-            		console.log("snapshots success",store,success,data.length,store.totalCount);
+            		console.log("snapshots success",store,success, ( !_.isNull(data) ? data.length : "null"),store.totalCount);
             		// var raw = _.map(data,function(d) { return d.data; })
             		deferred.resolve( store.totalCount );
         		}
@@ -501,7 +507,7 @@
         yAxis: [
             {
                 title: {
-                    text: '# Portfolio Items'
+                    text: 'User Activity Ratio'
                 }
             }
         ],
@@ -510,7 +516,7 @@
                 tooltip: {
                     headerFormat: '<b>{series.name}</b><br>',
                     //pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}, % Active:{point.pct}'
-                    pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}<br>Feature Activity Ratio:{point.featureRatio} User Activity Ratio:{point.activityRatio}'
+                    pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}<br>Feature Activity Ratio:{point.featureRatio} User Activity Ratio:{point.activityRatio} Snapshots:{point.snapshots}'
                 }
             }
         }
