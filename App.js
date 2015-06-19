@@ -281,11 +281,13 @@ Ext.define('CustomApp', {
 				if (moment.duration(now.diff( moment(rec.get("date")))).asHours() > 24) {
 					store.remove(records);
 					store.sync();
+					records = [];
 				} else {
 					console.log("Resolving from cache");
 					deferred.resolve(_.first(records).get("value"));
 				}
-			} else {
+			}
+			if (records.length===0) {
 		        me._loadAStoreWithAPromise(
 	            'WorkspacePermission', 
 	            ["Workspace","User","Name","Role"]
@@ -296,7 +298,7 @@ Ext.define('CustomApp', {
 		            	var data = _.map(permissions,function(p){return p.data;});
 		            	store.add({date: new Date(),value: data});
 		            	store.sync();
-		                deferred.resolve(permissions);
+		                deferred.resolve(data);
 		            }
 	            }) 
 	        } 
