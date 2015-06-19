@@ -343,8 +343,29 @@ Ext.define('CustomApp', {
     },
 
     readUsers : function() {
+
+    	var disabledUsersFilter = function() {
+            var filter = Ext.create('Rally.data.wsapi.Filter', {
+                property: 'Disabled',
+                operator: '=',
+                value: false
+            });
+            filter = filter.or(Ext.create('Rally.data.wsapi.Filter', {
+                property: 'Disabled',
+                operator: '=',
+                value: null
+            }));
+
+        	return filter;
+        };
+
+
     	var deferred = Ext.create('Deft.Deferred');
-    	this._loadAStoreWithAPromise( "User", ["UserName","UserPermissions"])
+    	this._loadAStoreWithAPromise( 
+    		"User", 
+    		["UserName","UserPermissions"],
+    		[disabledUsersFilter()]
+    		)
     		.then( {
             	success: function(users) {
             		deferred.resolve(users);
