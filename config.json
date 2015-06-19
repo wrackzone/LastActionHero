@@ -6,7 +6,7 @@
    "javascript": [
       "App.js",
       "_lah_chart.js",
-      "https://cdnjs.cloudflare.com/ajax/libs/async/1.22/async.min.js"
+      "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.10.3/moment.min.js"
    ],
    "css": [
       "app.css"
