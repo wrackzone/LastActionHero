@@ -6,15 +6,15 @@ Ext.define('CustomApp', {
 
     	var me = this;
 
-        Deft.Promise.all([me.readWorkspaces(),me.readWorkspacePermissions(),me.readUsers()],me).then({
+        Deft.Promise.all([me.readWorkspaces()],me).then({
+
             success: function(results) {
                 console.log("results",results);
                 var workspaces = _.first(results);
-                var permissions = results[1];
 
                 Deft.Promise.all([
 
-                	me.setUserCounts(workspaces,permissions),
+                	me.setUserCounts(workspaces),
                 	me.setFeatureCounts(workspaces),
                 	me.setFeatureTIP(workspaces)
 
@@ -132,17 +132,19 @@ Ext.define('CustomApp', {
 
     },
 
-    setUserCounts : function(workspaces,permissions) {
-    	console.log("Getting Users");
+    setUserCounts : function(workspaces) {
+
+		console.log("Getting Users");
+    	var me = this;
     	var deferred = Ext.create('Deft.Deferred');
-        _.each(workspaces,function(ws,i){
-	    	var perms = _.filter(permissions,function(perm){
-	    		return (perm.Workspace._ref === ws.get("_ref")) &&
-	    			(perm.Role === "User");
-	    	});
-	    	ws.set("UserWorkspaceCount",perms.length);
-	    });
-	    deferred.resolve([]);
+    	me.readUsers(workspaces).then({
+    		success : function(values) {
+    			_.each(workspaces,function(ws,i){
+    				ws.set("UserWorkspaceCount",values[i].length);
+    			});
+    			deferred.resolve([]);
+    		}
+    	});
 	    return deferred.promise;
     },
 
@@ -270,52 +272,6 @@ Ext.define('CustomApp', {
 	            }
         }) 
 
-  //       Ext.define('lah-cache', {
-		//     fields: ['date', 'value'],
-		//     extend: 'Ext.data.Model',
-		//     proxy: {
-		//         type: 'localstorage',
-		//         id  : 'lah-workspace-permissions'
-		//     }
-		// });
-
-		// var store = Ext.create('Ext.data.Store', {
-		// 	autoLoad : false,
-  //   		model: "lah-cache"
-		// });
-
-		// store.load(function(records, operation, success){
-
-		// 	console.log("Success:",success,"Records:",records.length,records);
-		// 	var now = moment();
-		// 	if (records.length>0) {
-		// 		var rec = _.first(records);
-		// 		if (moment.duration(now.diff( moment(rec.get("date")))).asHours() > 24) {
-		// 			store.remove(records);
-		// 			store.sync();
-		// 			records = [];
-		// 		} else {
-		// 			console.log("Resolving from cache");
-		// 			deferred.resolve(_.first(records).get("value"));
-		// 		}
-		// 	}
-		// 	if (records.length===0) {
-		//         me._loadAStoreWithAPromise(
-	 //            'WorkspacePermission', 
-	 //            ["Workspace","User","Name","Role"]
-	 //            ).then({
-		//             scope: this,
-		//             success: function(permissions) {
-		//             	console.log("Permissions:",permissions.length);
-		//             	var data = _.map(permissions,function(p){return p.data;});
-		//             	store.add({date: new Date(),value: data});
-		//             	store.sync();
-		//                 deferred.resolve(data);
-		//             }
-	 //            }) 
-	 //        } 
-  //       });
-
         return deferred.promise;
     
     },
@@ -342,37 +298,45 @@ Ext.define('CustomApp', {
     	return deferred.promise;
     },
 
-    readUsers : function() {
+    readUsers : function(workspaces) {
 
-    	var disabledUsersFilter = function() {
+    	var usersFilter = function() {
             var filter = Ext.create('Rally.data.wsapi.Filter', {
+                property: 'WorkspacePermission',
+                operator: '!=',
+                value: 'No Access'
+            });
+            filter = filter.and(Ext.create('Rally.data.wsapi.Filter', {
                 property: 'Disabled',
                 operator: '=',
                 value: false
-            });
-            filter = filter.or(Ext.create('Rally.data.wsapi.Filter', {
-                property: 'Disabled',
-                operator: '=',
-                value: null
             }));
-
         	return filter;
         };
 
-
-    	var deferred = Ext.create('Deft.Deferred');
-    	this._loadAStoreWithAPromise( 
-    		"User", 
-    		["UserName","UserPermissions"],
-    		[disabledUsersFilter()]
-    		)
-    		.then( {
-            	success: function(users) {
-            		deferred.resolve(users);
-            	},
-            scope: this
+    	var me = this;
+        var promises = _.map(workspaces,function(workspace) {
+            var deferred = Ext.create('Deft.Deferred');
+            me._loadAStoreWithAPromise(
+                    "User", 
+                    ["UserName"], 
+                    [usersFilter()],
+                    {
+                    	workspace : workspace.get("_ref"),
+                    	project : null,
+                    }
+                ).then({
+                    scope: me,
+                    success: function(values) {
+                        deferred.resolve(values);
+                    },
+                    failure: function(error) {
+                        deferred.resolve([]);
+                    }
+                });
+            return deferred.promise;
         });
-    	return deferred.promise;
+        return Deft.Promise.all(promises);
     },
 
     _loadAStoreWithAPromise: function(model_name, model_fields, filters,ctx,order) {
