@@ -16,13 +16,13 @@ Ext.define('Rally.technicalservices.lahChart',{
         },
         xAxis: {
                 title: {
-                    text: 'Median Feature TIP'
+                    text: 'Median Story TIP'
                 }
         },
         yAxis: [
             {
                 title: {
-                    text: 'User Activity Ratio'
+                    text: '60 Day Activity'
                 }
             }
         ],
@@ -31,7 +31,7 @@ Ext.define('Rally.technicalservices.lahChart',{
                 tooltip: {
                     headerFormat: '<b>{series.name}</b><br>',
                     //pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}, % Active:{point.pct}'
-                    pointFormat: 'TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}<br>Feature Activity Ratio:{point.featureRatio} User Activity Ratio:{point.activityRatio} Snapshots:{point.snapshots}'
+                    pointFormat: 'PortfolioItems:{point.portfolioitems} Stories:{point.stories} Defects:{point.defects} <br>TIP:{point.x}, Portfolio Items:{point.y}, Users:{point.z}<br>Story Activity Ratio:{point.featureRatio} User Activity Ratio:{point.activityRatio} Snapshots:{point.snapshots}'
                 }
             }
         }

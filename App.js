@@ -2,6 +2,12 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
 
+    config: {
+        defaultSettings: {
+            yAxisType : "Story"
+        }
+    },
+
     launch: function() {
 
     	var me = this;
@@ -21,7 +27,10 @@ Ext.define('CustomApp', {
                 	me.setUserCounts(workspaces),
                 	me.setFeatureCounts(workspaces),
                 	me.setFeatureTIP(workspaces),
-                	me.setUserActivity(workspaces)
+                	me.setUserActivity(workspaces),
+                    me.setWorkspacePortfolioItemCounts(workspaces),
+                    me.setWorkspaceStoryCounts(workspaces),
+                    me.setWorkspaceDefectCounts(workspaces)
 
                 ],me).then({
 
@@ -60,21 +69,9 @@ Ext.define('CustomApp', {
 
     prepareChartData : function(workspaces) {
 
+        var me = this;
+
 		var seriesData = _.map(workspaces,function(ws){
-
-			// var activityUsers = _.uniq( _.map(ws.get("WorkspaceUserActivity"), function(snapshot) { return snapshot._User;}));
-			// var totalUsers = ws.get("UserWorkspaceCount");
-			
-			// var pct = totalUsers > 0 ? (activityUsers.length / totalUsers ) * 100 : 0;
-			
-			// var seriesColor = null;
-			// if (pct > 80) { seriesColor = "#107c1e" } else
-			// 	if (pct > 60) { seriesColor = "#8dc63f"} else 
-			// 		if (pct > 40) { seriesColor = "#fad200"} else
-			// 			if (pct > 20) { seriesColor = "#ee6c19"} else
-			// 				seriesColor = "#ec1c27";
-
-			// console.log(ws.get("Name"),"ActiveUsers:",activityUsers.length,"TotalUsers",totalUsers,"Percent",pct,"color:",seriesColor);
 
 			var snapshots = ws.get("WorkspaceUserActivity");
 			var features = ws.get("WorkspaceFeatureCount");
@@ -86,16 +83,26 @@ Ext.define('CustomApp', {
 			featureRatio = _.isNaN(featureRatio) ? 0 : featureRatio;
 			activityRatio = _.isNaN(activityRatio) ? 0 : activityRatio;
 
+            var yAxisField = me.getSetting("yAxisType");
+
+            yAxisField = (yAxisField==="Story" ? "HierarchicalRequirement" : yAxisField) + "Count";
+
+            // console.log("yAxisField",yAxisField);
+
 			return {
 				name : ws.get("Name"),
 				// color : seriesColor,
 				data : [{ x : ws.get("FeatureTIPValue"), 
 						  // y : ws.get("WorkspaceFeatureCount"), 
-						  y : activityRatio,
+						  // y : activityRatio,
+                          y : ws.get(yAxisField),
 						  z : ws.get("UserWorkspaceCount"),
 						  featureRatio : featureRatio,
 						  activityRatio : activityRatio,
-						  snapshots : snapshots
+						  snapshots : snapshots,
+                          portfolioitems : ws.get("PortfolioItemCount"),
+                          defects : ws.get("DefectCount"),
+                          stories : ws.get("HierarchicalRequirementCount"),
 						}]
 						  // pct : pct}]
 			}
@@ -140,12 +147,16 @@ Ext.define('CustomApp', {
     		var datapoint = _.last(scope.dataPoints);
     		var metricValueKey = _.first(_.keys(datapoint.data));
     		var metricValue = datapoint.data[metricValueKey].value;
+
+            metricValue = Math.round(metricValue * 100) / 100;
+
+
     		return metricValue;
     	};
 
     	me.readFeatureMetrics(workspaces).then({
     		success : function(values) {
-    			console.log("Workspace Insights API:",values);
+    			//console.log("Workspace Insights API:",values);
     			_.each(workspaces,function(workspace,i){
     				workspace.set("FeatureTIPValue", getLastTIPFromValue(values[i]));
     			})
@@ -172,6 +183,100 @@ Ext.define('CustomApp', {
     	return deferred.promise;
     },
 
+    setWorkspacePortfolioItemCounts : function(workspaces) {
+
+        var me = this;
+        var type = "PortfolioItem";
+        var deferred = Ext.create('Deft.Deferred');
+        me.readWorkspaceTypeSnapshots(workspaces,type).then({
+            success : function(values) {
+                console.log("[" + type + "] Workspace Snapshots:",values);
+                _.each(workspaces,function(workspace,i){
+                    console.log("["+type+"] snapshot:",workspace.get("Name"),values[i]);
+                    workspace.set(type+"Count", values[i]);
+                })
+                deferred.resolve([]);
+            }
+        });
+        return deferred.promise;
+    },
+
+    setWorkspaceStoryCounts : function(workspaces) {
+
+        var me = this;
+        var type = "HierarchicalRequirement";
+        var deferred = Ext.create('Deft.Deferred');
+        me.readWorkspaceTypeSnapshots(workspaces,type).then({
+            success : function(values) {
+                console.log("[" + type + "] Workspace Snapshots:",values);
+                _.each(workspaces,function(workspace,i){
+                    console.log("["+type+"] snapshot:",workspace.get("Name"),values[i]);
+                    workspace.set(type+"Count", values[i]);
+                })
+                deferred.resolve([]);
+            }
+        });
+        return deferred.promise;
+    },
+
+    setWorkspaceDefectCounts : function(workspaces) {
+
+        var me = this;
+        var type = "Defect";
+        var deferred = Ext.create('Deft.Deferred');
+        me.readWorkspaceTypeSnapshots(workspaces,type).then({
+            success : function(values) {
+                console.log("[" + type + "] Workspace Snapshots:",values);
+                _.each(workspaces,function(workspace,i){
+                    console.log("["+type+"] snapshot:",workspace.get("Name"),values[i]);
+                    workspace.set(type+"Count", values[i]);
+                })
+                deferred.resolve([]);
+            }
+        });
+        return deferred.promise;
+    },
+
+
+    readWorkspaceTypeSnapshots : function(workspaces,type) {
+
+        var createTypeFind = function(type) {
+            var find = {
+                "_ValidFrom" : { "$gt" : moment().subtract(60,"days").toISOString() }, // "2015-06-01T00:00:00.000Z"} // moment().subtract(30,"days").toISOString()
+                "_TypeHierarchy" : { "$in" : [type] }
+            }
+            return find;
+        }
+
+        var me = this;
+        var promises = _.map(workspaces, function(workspace)  {
+            var deferred = Ext.create('Deft.Deferred');
+            // find,fetch,hydrate,ctx
+            // loadASnapShotStoreWithAPromise: function(find, fetch, hydrate, ctx) {
+            me.loadASnapShotStoreWithAPromise(
+                    createTypeFind(type), 
+                    ["_TypeHierarchy","ObjectID"], 
+                    ["_TypeHierarchy"],
+                    {
+                        workspace : workspace.get("_ref"),
+                        project : null,
+                    }
+                ).then({
+                    scope: me,
+                    success: function(values) {
+                        deferred.resolve(values);
+                    },
+                    failure: function(error) {
+                        console.log("error",error);
+                        deferred.resolve([]);
+                    }
+                });
+            return deferred.promise;
+        });
+        return Deft.Promise.all(promises);
+
+    },
+
     readWorkspaceSnapshots : function(workspaces) {
 
     	var createSnapshotFind = function(workspace) {
@@ -185,6 +290,7 @@ Ext.define('CustomApp', {
         var promises = _.map(workspaces,function(workspace) {
             var deferred = Ext.create('Deft.Deferred');
             // find,fetch,hydrate,ctx
+            // loadASnapShotStoreWithAPromise: function(find, fetch, hydrate, ctx) {
             me.loadASnapShotStoreWithAPromise(
                     createSnapshotFind(workspace), 
                     ["_User"], 
@@ -285,7 +391,9 @@ Ext.define('CustomApp', {
         var promises = _.map(workspaces,function(workspace) {
             var deferred = Ext.create('Deft.Deferred');
             me._loadAStoreWithAPromise(
-                    "PortfolioItem", 
+                    // "PortfolioItem", 
+                    "HierarchicalRequirement",
+
                     ["FormattedID"], 
                     [createFeatureFilter()],
                     {
@@ -312,7 +420,8 @@ Ext.define('CustomApp', {
 		var insightsAPI = function(workspace) {
 			var deferred = Ext.create('Deft.Deferred');
 			var metrics = [
-            	"TimeInProcessFeatureStart0P50"
+				"TimeInProcessStoryAndDefectP50"
+            	// "TimeInProcessFeatureStart0P50"
             ];
 			var workspace = workspace.get("ObjectID");
 			var lastMonth = moment(); // moment().subtract(1,'months');
@@ -448,7 +557,7 @@ Ext.define('CustomApp', {
             find : find,
             fetch: fetch,
             hydrate : hydrate,
-            pageSize : 100
+            pageSize : 1000
         };
 
         if (!_.isUndefined(ctx)) { config.context = ctx;}
@@ -468,7 +577,35 @@ Ext.define('CustomApp', {
         // console.log("storeConfig",storeConfig);
 		Ext.create('Rally.data.lookback.SnapshotStore', storeConfig);
         return deferred.promise;
+    },
+
+    getSettingsFields: function() {
+        var me = this;
+
+        var yAxisStore = new Ext.data.ArrayStore({
+            fields: ['type'],
+            data : [['PortfolioItem'],['Story'],['Defect']]
+        });  
+
+
+        return [ 
+            {
+                name: 'yAxisType',
+                xtype: 'combo',
+                store : yAxisStore,
+                valueField : 'type',
+                displayField : 'type',
+                queryMode : 'local',
+                forceSelection : true,
+                boxLabelAlign: 'after',
+                fieldLabel: 'Y Axis Type',
+                margin: '0 0 15 50',
+                labelStyle : "width:200px;",
+                afterLabelTpl: 'Select the Type to use for the Y Axis Value'
+            }
+        ];
     }
+
 
 
 });
