@@ -1,10 +1,13 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    requests : 0,
 
     config: {
         defaultSettings: {
-            yAxisType : "Story"
+            yAxisType : "Story",
+            useUniqueUserCount : true
+
         }
     },
 
@@ -19,7 +22,7 @@ Ext.define('CustomApp', {
             success: function(results) {
 
             	me.setLoading(false);
-                console.log("results",results);
+                // console.log("results",results);
                 var workspaces = _.first(results);
 
                 Deft.Promise.all([
@@ -35,11 +38,13 @@ Ext.define('CustomApp', {
                 ],me).then({
 
                 	success : function(results) {
-						console.log("workspaces",_.map(workspaces,function(w){return w.get("Name")+"-"+w.get("UserWorkspaceCount")+":"+w.get("ProjectsCount")}));
+                        me.hideMask();
+						// console.log("workspaces",_.map(workspaces,function(w){return w.get("Name")+"-"+w.get("UserWorkspaceCount")+":"+w.get("ProjectsCount")}));
 						me.createChart(me.prepareChartData(workspaces));
                 	},
                 	failure : function(error) {
-                		console.log("error---",error);
+                        me.hideMask();
+                		console.log("failure in launch---",error);
                 	}
 
                 });
@@ -50,8 +55,10 @@ Ext.define('CustomApp', {
 
     createChart : function(series) {
 
+        console.log("createChart",series);
+
     	var me = this;
-        me.setLoading(false);
+        // me.setLoading(false);
 
         if (!_.isUndefined(me.chart)) {
             me.remove(me.chart);
@@ -62,6 +69,8 @@ Ext.define('CustomApp', {
             chartData: { series : series },
             title: 'Workspace Visualization'
         });
+
+        console.log(me.chart);
 
         me.add(me.chart);
 
@@ -84,10 +93,15 @@ Ext.define('CustomApp', {
 			activityRatio = _.isNaN(activityRatio) ? 0 : activityRatio;
 
             var yAxisField = me.getSetting("yAxisType");
+            var useUniqueUserCount = me.getSetting("useUniqueUserCount") === true || me.getSetting("useUniqueUserCount") === 'true'
 
-            yAxisField = (yAxisField==="Story" ? "HierarchicalRequirement" : yAxisField) + "Count";
+            if (useUniqueUserCount===true) {
+                yAxisField = (yAxisField==="Story" ? "HierarchicalRequirement" : yAxisField) + "UniqueUserCount";
+            } else {
+                yAxisField = (yAxisField==="Story" ? "HierarchicalRequirement" : yAxisField) + "Count";
+            }
 
-            // console.log("yAxisField",yAxisField);
+            // console.log("yAxisField",yAxisField,ws);
 
 			return {
 				name : ws.get("Name"),
@@ -103,26 +117,26 @@ Ext.define('CustomApp', {
                           portfolioitems : ws.get("PortfolioItemCount"),
                           defects : ws.get("DefectCount"),
                           stories : ws.get("HierarchicalRequirementCount"),
+                          portfolioitemsUniqueUsers : ws.get("PortfolioItemUniqueUserCount"),
+                          defectsUniqueUsers : ws.get("DefectUniqueUserCount"),
+                          storiesUniqueUsers : ws.get("HierarchicalRequirementUniqueUserCount"),
+
 						}]
 						  // pct : pct}]
 			}
 		});    	
-
-    	console.log("seriesData",seriesData);
-    	console.log("seriesData",_.map(seriesData,function(sd){return _.first(sd.data).y}));
     	return seriesData;
-
     },
 
     setFeatureCounts : function(workspaces) {
-    	console.log("Getting Features");
+    	// console.log("Getting Features");
     	var me = this;
     	var deferred = Ext.create('Deft.Deferred');
     	me.readPortfolioItems(workspaces).then({
 			success : function(values) {
-				console.log("values",values);
+				// console.log("values",values);
 				_.each(workspaces,function(workspace,i){
-					console.log(workspace.get("Name"),values[i].length);
+					// console.log(workspace.get("Name"),values[i].length);
 					workspace.set("WorkspaceFeatureCount",values[i].length);
 				})
 				deferred.resolve([]);
@@ -135,7 +149,7 @@ Ext.define('CustomApp', {
     },
 
     setFeatureTIP : function(workspaces) {
-    	console.log("Getting Feature TIP");
+    	// console.log("Getting Feature TIP");
 
     	var me = this;
     	var deferred = Ext.create('Deft.Deferred');
@@ -172,15 +186,20 @@ Ext.define('CustomApp', {
     	var deferred = Ext.create('Deft.Deferred');
     	me.readWorkspaceSnapshots(workspaces).then({
     		success : function(values) {
-    			console.log("Workspace Snapshots:",values);
+    			// console.log("Workspace Snapshots:",values);
     			_.each(workspaces,function(workspace,i){
-    				console.log("snapshot:",workspace.get("Name"),values[i]);
-    				workspace.set("WorkspaceUserActivity", values[i]);
+    				// console.log("snapshot:",workspace.get("Name"),values[i]);
+    				workspace.set("WorkspaceUserActivity", !_.isUndefined(values[i]) ? values[i].length : undefined);
     			})
     			deferred.resolve([]);
     		}
     	});
     	return deferred.promise;
+    },
+
+    uniqSnapshotsUserCount : function(snapshots) {
+        var uniqueUsers = _.uniq(snapshots,function(value){return value.get("_User")});
+        return uniqueUsers.length;
     },
 
     setWorkspacePortfolioItemCounts : function(workspaces) {
@@ -190,10 +209,10 @@ Ext.define('CustomApp', {
         var deferred = Ext.create('Deft.Deferred');
         me.readWorkspaceTypeSnapshots(workspaces,type).then({
             success : function(values) {
-                console.log("[" + type + "] Workspace Snapshots:",values);
                 _.each(workspaces,function(workspace,i){
-                    console.log("["+type+"] snapshot:",workspace.get("Name"),values[i]);
-                    workspace.set(type+"Count", values[i]);
+                    workspace.set(type+"Count", !_.isUndefined(values[i]) ? values[i].length : undefined);
+                    workspace.set(type+"UniqueUserCount", 
+                        !_.isUndefined(values[i]) ? me.uniqSnapshotsUserCount(values[i]) : undefined);
                 })
                 deferred.resolve([]);
             }
@@ -210,8 +229,10 @@ Ext.define('CustomApp', {
             success : function(values) {
                 console.log("[" + type + "] Workspace Snapshots:",values);
                 _.each(workspaces,function(workspace,i){
-                    console.log("["+type+"] snapshot:",workspace.get("Name"),values[i]);
-                    workspace.set(type+"Count", values[i]);
+                    workspace.set(type+"Count", !_.isUndefined(values[i]) ? values[i].length : undefined);
+                    workspace.set(type+"UniqueUserCount", 
+                        !_.isUndefined(values[i]) ? me.uniqSnapshotsUserCount(values[i]) : undefined);
+
                 })
                 deferred.resolve([]);
             }
@@ -226,10 +247,11 @@ Ext.define('CustomApp', {
         var deferred = Ext.create('Deft.Deferred');
         me.readWorkspaceTypeSnapshots(workspaces,type).then({
             success : function(values) {
-                console.log("[" + type + "] Workspace Snapshots:",values);
                 _.each(workspaces,function(workspace,i){
-                    console.log("["+type+"] snapshot:",workspace.get("Name"),values[i]);
-                    workspace.set(type+"Count", values[i]);
+                    workspace.set(type+"Count", !_.isUndefined(values[i]) ? values[i].length : undefined);
+                    workspace.set(type+"UniqueUserCount", 
+                        !_.isUndefined(values[i]) ? me.uniqSnapshotsUserCount(values[i]) : undefined);
+
                 })
                 deferred.resolve([]);
             }
@@ -255,7 +277,7 @@ Ext.define('CustomApp', {
             // loadASnapShotStoreWithAPromise: function(find, fetch, hydrate, ctx) {
             me.loadASnapShotStoreWithAPromise(
                     createTypeFind(type), 
-                    ["_TypeHierarchy","ObjectID"], 
+                    ["_TypeHierarchy","ObjectID","_User"], 
                     ["_TypeHierarchy"],
                     {
                         workspace : workspace.get("_ref"),
@@ -334,7 +356,7 @@ Ext.define('CustomApp', {
 
     setUserCounts : function(workspaces) {
 
-		console.log("Getting Users");
+		// console.log("Getting Users");
     	var me = this;
     	var deferred = Ext.create('Deft.Deferred');
     	me.readUsers(workspaces).then({
@@ -417,11 +439,14 @@ Ext.define('CustomApp', {
 
 	readFeatureMetrics : function(workspaces) {
 
+        var me = this;
+
 		var insightsAPI = function(workspace) {
 			var deferred = Ext.create('Deft.Deferred');
 			var metrics = [
-				"TimeInProcessStoryAndDefectP50"
-            	// "TimeInProcessFeatureStart0P50"
+				( me.getSetting("yAxisType") === "PortfolioItem" ? 
+                    "TimeInProcessFeatureStart0P50" :
+                    "TimeInProcessStoryAndDefectP50" )
             ];
 			var workspace = workspace.get("ObjectID");
 			var lastMonth = moment(); // moment().subtract(1,'months');
@@ -557,7 +582,8 @@ Ext.define('CustomApp', {
             find : find,
             fetch: fetch,
             hydrate : hydrate,
-            pageSize : 1000
+            pageSize : 1000,
+            limit : 'Infinity'
         };
 
         if (!_.isUndefined(ctx)) { config.context = ctx;}
@@ -568,13 +594,17 @@ Ext.define('CustomApp', {
             // limit: Infinity,
             listeners: {
                load: function(store, data, success) {
-            		console.log("snapshots success",store,success, ( !_.isNull(data) ? data.length : "null"),store.totalCount);
+            		// console.log("snapshots success",store,success, ( !_.isNull(data) ? data.length : "null"),store.totalCount);
             		// var raw = _.map(data,function(d) { return d.data; })
-            		deferred.resolve( store.totalCount );
+                    me.requests = me.requests - 1;
+                    me.showMask("Processing " + me.requests + " requests ...");
+            		// deferred.resolve( store.totalCount );
+                    deferred.resolve(data);
         		}
             },
         });
         // console.log("storeConfig",storeConfig);
+        me.requests = me.requests + 1;
 		Ext.create('Rally.data.lookback.SnapshotStore', storeConfig);
         return deferred.promise;
     },
@@ -602,9 +632,24 @@ Ext.define('CustomApp', {
                 margin: '0 0 15 50',
                 labelStyle : "width:200px;",
                 afterLabelTpl: 'Select the Type to use for the Y Axis Value'
+            },
+            {
+                name: 'useUniqueUserCount',
+                xtype : 'rallycheckboxfield',
+                label : 'Use number of transaction unique users for Y axis'
             }
         ];
-    }
+    },
+    showMask: function(msg) {
+        if ( this.getEl() ) { 
+            this.getEl().unmask();
+            this.getEl().mask(msg);
+        }
+    },
+    hideMask: function() {
+        this.getEl().unmask();
+    },
+
 
 
 
